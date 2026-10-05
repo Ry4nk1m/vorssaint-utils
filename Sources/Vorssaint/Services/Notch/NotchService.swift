@@ -367,7 +367,7 @@ final class NotchService: ObservableObject {
 
     /// Full screen keeps a clickable black cutout until the user opens it.
     var fullscreenCompact: Bool {
-        hiddenInFullscreen && !expanded && !peeking && !menuBarRevealed
+        hiddenInFullscreen && !expanded && !peeking && !menuBarRevealed && notice == nil && departingNotice == nil
     }
 
     /// A simulated cutout covers no camera, so in full screen it stays out
@@ -2075,9 +2075,15 @@ final class NotchService: ObservableObject {
         return accepted
     }
 
+    /// Plugging in or unplugging still shows in full screen, where the rest of
+    /// the island stays out of sight.
+    private func showsFullscreenBatteryNotice(_ notice: NotchNotice) -> Bool {
+        notice.event == .battery && hiddenInFullscreen && acceptsUserInteraction
+    }
+
     @discardableResult
     func show(_ incoming: NotchNotice) -> Bool {
-        guard showsSystemFeedback, NotchSupport.routes(incoming.event),
+        guard showsSystemFeedback || showsFullscreenBatteryNotice(incoming), NotchSupport.routes(incoming.event),
               NotchSupport.shouldReplace(notice?.event, with: incoming.event, held: noticeExpanded) else { return false }
         noticeWork?.cancel(); noticeWork = nil
         var incoming = incoming
