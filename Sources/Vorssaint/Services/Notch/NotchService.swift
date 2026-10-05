@@ -234,10 +234,16 @@ final class NotchService: ObservableObject {
     @Published private(set) var hiddenInFullscreen = false {
         didSet {
             guard hiddenInFullscreen != oldValue else { return }
+            syncFullscreenRevealMonitoring()
             NotificationCenter.default.post(name: Self.fullscreenVisibilityDidChange, object: self,
                                             userInfo: ["hidden": hiddenInFullscreen])
         }
     }
+    /// Full screen with the system menu bar pulled down: the island comes back with it.
+    @Published private(set) var menuBarRevealed = false
+    private var fullscreenRevealTimer: Timer?
+    private var fullscreenTopSince: Date?
+    private var fullscreenLeftSince: Date?
     private var settingsSignature = ""
     private var gesture = NotchGestureSupport()
     private var sectionScroll = NotchSectionScroll()
@@ -361,7 +367,7 @@ final class NotchService: ObservableObject {
 
     /// Full screen keeps a clickable black cutout until the user opens it.
     var fullscreenCompact: Bool {
-        hiddenInFullscreen && !expanded && !peeking
+        hiddenInFullscreen && !expanded && !peeking && !menuBarRevealed
     }
 
     /// A simulated cutout covers no camera, so in full screen it stays out
@@ -2813,7 +2819,7 @@ final class NotchService: ObservableObject {
     }
 
     private func syncMenuSpaceMonitoring() {
-        guard !hiddenInFullscreen else { stopMenuSpaceMonitoring(); return }
+        guard !(hiddenInFullscreen && !menuBarRevealed) else { stopMenuSpaceMonitoring(); return }
         // The explicit cover-menus choice also keeps a simulated island at
         // rest. Otherwise its visibility follows AX menu measurements, which
         // can change just because focus moves to another app or display.
@@ -3014,6 +3020,64 @@ final class NotchService: ObservableObject {
                              cameraFit: NotchCameraFit.current(), silhouette: NotchSilhouette.current(),
                              capsuleFit: NotchCapsuleFit.current(),
                              outline: UserDefaults.standard.bool(forKey: DefaultsKey.notchOutlineEnabled))
+    }
+
+    /// In full screen the system menu bar stays up out of sight until the
+    /// pointer rests at the top edge. The island cannot ask the system whether
+    /// the bar is down, so it follows the pointer the same way: it returns after
+    /// a short rest at the edge and leaves once the pointer is clear of the
+    /// bar's strip.
+    private func syncFullscreenRevealMonitoring() {
+        guard hiddenInFullscreen, running, !suspended else {
+            fullscreenRevealTimer?.invalidate()
+            fullscreenRevealTimer = nil
+            fullscreenTopSince = nil
+            if menuBarRevealed { menuBarRevealed = false }
+            return
+        }
+        guard fullscreenRevealTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.02, repeats: true) { [weak self] _ in self?.readFullscreenReveal() }
+        timer.tolerance = 0.005
+        fullscreenRevealTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func readFullscreenReveal() {
+        guard hiddenInFullscreen, running, !suspended else { syncFullscreenRevealMonitoring(); return }
+        let frame = geometry.screen
+        let point = NSEvent.mouseLocation
+        let overDisplay = point.x >= frame.minX && point.x <= frame.maxX
+        let fromTop = frame.maxY - point.y
+        let stripDepth = max(geometry.menuBarHeight, 24) + 4
+        if menuBarRevealed {
+            fullscreenTopSince = nil
+            if !overDisplay || fromTop > stripDepth {
+                let since = fullscreenLeftSince ?? Date()
+                fullscreenLeftSince = since
+                if Date().timeIntervalSince(since) >= 0.1 { setMenuBarRevealed(false) }
+            } else {
+                fullscreenLeftSince = nil
+            }
+        } else if overDisplay, fromTop >= 0, fromTop <= 2 {
+            let since = fullscreenTopSince ?? Date()
+            fullscreenTopSince = since
+            if Date().timeIntervalSince(since) >= 0 { setMenuBarRevealed(true) }
+        } else {
+            fullscreenTopSince = nil
+        }
+    }
+
+    private func setMenuBarRevealed(_ revealed: Bool) {
+        guard menuBarRevealed != revealed else { return }
+        fullscreenLeftSince = nil
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        // Coming back is instant to keep up with the menu bar, with only a short
+        // fade so it does not pop. Going away keeps its normal animation.
+        withAnimation(revealed && !reduceMotion ? .easeOut(duration: 0.05) : nil) {
+            menuBarRevealed = revealed
+        }
+        syncVisibleConsumers()
+        refreshPresentation(animated: revealed ? false : !reduceMotion)
     }
 
     private func updateFullscreenVisibility(displayID: CGDirectDisplayID) {
@@ -3695,6 +3759,7 @@ final class NotchService: ObservableObject {
     }
 
     private func syncVisibleConsumers() {
+        syncFullscreenRevealMonitoring()
         syncMenuSpaceMonitoring()
         guard running, !suspended else { releaseMonitor(); return }
         if fullscreenCompact {
