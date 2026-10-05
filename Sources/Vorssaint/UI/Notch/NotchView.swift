@@ -30,7 +30,17 @@ struct NotchView: View {
                 let arrives = service.compactActivity != nil && service.mascotJustRested
                 let leaves = service.compactActivity == nil && service.mascotAtRest
                     && service.departingMusic == nil && service.lingeringMusic == nil
-                guard arrives || leaves else { return }
+                if arrives || leaves {
+                    transaction.animation = .easeInOut(duration: NotchMascotMotion.restCrossfade)
+                    return
+                }
+                // Every other swap (battery to music, battery to an agent,
+                // one activity to another) fades the same way. A song
+                // leaving keeps its own departure, and a change that already
+                // carries an animation, as the picker's, keeps that one.
+                let songLeaving = service.compactActivity == nil
+                    && (service.departingMusic != nil || service.lingeringMusic != nil)
+                guard transaction.animation == nil, !songLeaving else { return }
                 transaction.animation = .easeInOut(duration: NotchMascotMotion.restCrossfade)
             }
             .frame(width: service.surfaceSize.width, height: service.surfaceSize.height, alignment: .top)
@@ -811,6 +821,7 @@ struct NotchRestingStrip: View {
                     .frame(width: geometry.restingWingWidth)
                     .opacity(wingStepsAside(.left) ? 0 : 1)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: wingStepsAside(.left))
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: service.idleContent)
                     Color.clear.frame(width: geometry.cameraWidth)
                     ZStack(alignment: .leading) {
                         Color.clear
@@ -835,6 +846,7 @@ struct NotchRestingStrip: View {
                     .frame(width: geometry.restingWingWidth)
                     .opacity(wingStepsAside(.right) ? 0 : 1)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: wingStepsAside(.right))
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: service.idleContent)
                 } else { Color.clear }
             }
             if service.mascotShows(on: geometry) {

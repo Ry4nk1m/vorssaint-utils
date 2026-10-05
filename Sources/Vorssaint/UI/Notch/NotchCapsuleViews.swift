@@ -231,6 +231,7 @@ struct NotchCapsuleRestingView: View {
                 }
             }
             .foregroundStyle(.white.opacity(0.9))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: service.idleContent)
         }
     }
 }
