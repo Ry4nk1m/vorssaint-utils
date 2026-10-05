@@ -797,7 +797,10 @@ struct NotchRestingStrip: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 5))
                             }
                         case .battery:
-                            Image(systemName: "battery.100percent").font(.system(size: 12))
+                            NotchBatteryGlyph(percent: service.power.chargePercent,
+                                              isCharging: service.power.isCharging,
+                                              externalConnected: service.power.externalConnected,
+                                              height: 11)
                                 .padding(.leading, restingBatteryInset)
                         case .agents:
                             NotchAgentRestingWing(leading: true)

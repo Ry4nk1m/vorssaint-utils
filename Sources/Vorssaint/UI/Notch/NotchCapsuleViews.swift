@@ -208,8 +208,10 @@ struct NotchCapsuleRestingView: View {
             HStack(spacing: 5) {
                 switch service.idleContent {
                 case .battery:
-                    Image(systemName: "battery.100percent").font(.system(size: CapsuleLayout.symbolSize))
-                        .capsuleCentred("battery.100percent", weight: .regular)
+                    NotchBatteryGlyph(percent: service.power.chargePercent,
+                                      isCharging: service.power.isCharging,
+                                      externalConnected: service.power.externalConnected,
+                                      height: CapsuleLayout.symbolSize * 0.85)
                     if let percent = service.power.chargePercent {
                         Text("\(percent)%").font(Font(CapsuleLayout.smallFont as CTFont)).lineLimit(1)
                     }
