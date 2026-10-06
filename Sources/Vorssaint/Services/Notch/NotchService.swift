@@ -2085,11 +2085,13 @@ final class NotchService: ObservableObject {
         return accepted
     }
 
-    /// Power, volume, brightness and keyboard light still show in full screen,
-    /// where the rest of the island stays out of sight.
+    /// Every notice still shows in full screen, where the rest of the island
+    /// stays out of sight: power, volume and brightness, messages, copies, agent
+    /// news, songs, timers, downloads and the rest. The strips that stay on the
+    /// island while it rests, like the song playing or a running timer, remain
+    /// hidden there.
     private func showsFullscreenNotice(_ notice: NotchNotice) -> Bool {
-        [.battery, .volume, .brightness, .keyboardLight].contains(notice.event)
-            && hiddenInFullscreen && acceptsUserInteraction
+        hiddenInFullscreen && acceptsUserInteraction
     }
 
     @discardableResult
