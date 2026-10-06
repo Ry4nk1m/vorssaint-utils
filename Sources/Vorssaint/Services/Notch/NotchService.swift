@@ -989,6 +989,11 @@ final class NotchService: ObservableObject {
         acceptsSystemFeedback && !hiddenUntilHover
     }
 
+    /// Volume, brightness and keyboard light keep going through the island
+    /// while full screen hides the rest of it, so the system's own HUD stays away.
+    var acceptsLevelFeedback: Bool { acceptsUserInteraction }
+    var showsLevelFeedback: Bool { acceptsUserInteraction && !hiddenUntilHover }
+
     var protectedWindowIDs: Set<CGWindowID> {
         NotchSupport.showsInCaptures() ? [] : islandWindowIDs
     }
@@ -2080,15 +2085,16 @@ final class NotchService: ObservableObject {
         return accepted
     }
 
-    /// Plugging in or unplugging still shows in full screen, where the rest of
-    /// the island stays out of sight.
-    private func showsFullscreenBatteryNotice(_ notice: NotchNotice) -> Bool {
-        notice.event == .battery && hiddenInFullscreen && acceptsUserInteraction
+    /// Power, volume, brightness and keyboard light still show in full screen,
+    /// where the rest of the island stays out of sight.
+    private func showsFullscreenNotice(_ notice: NotchNotice) -> Bool {
+        [.battery, .volume, .brightness, .keyboardLight].contains(notice.event)
+            && hiddenInFullscreen && acceptsUserInteraction
     }
 
     @discardableResult
     func show(_ incoming: NotchNotice) -> Bool {
-        guard showsSystemFeedback || showsFullscreenBatteryNotice(incoming), NotchSupport.routes(incoming.event),
+        guard showsSystemFeedback || showsFullscreenNotice(incoming), NotchSupport.routes(incoming.event),
               NotchSupport.shouldReplace(notice?.event, with: incoming.event, held: noticeExpanded) else { return false }
         noticeWork?.cancel(); noticeWork = nil
         var incoming = incoming
@@ -3828,9 +3834,13 @@ final class NotchService: ObservableObject {
         guard running, !suspended else { releaseMonitor(); return }
         if fullscreenCompact {
             CameraPreviewService.shared.hideEmbedded()
-            // A copy on another display still shows the song playing.
+            // A copy on another display still shows the song playing, and the
+            // island coming back with the menu bar needs the song already known,
+            // or it would show the battery until the song arrives.
             let copiesShowMusic = showsCopies && NotchSupport.watchesMusicActivity()
-            if copiesShowMusic { NotchMusicService.shared.start() } else { NotchMusicService.shared.stop() }
+            let revealShowsMusic = modules.contains(.music)
+                && (NotchSupport.watchesMusicActivity() || NotchSupport.routes(.track))
+            if copiesShowMusic || revealShowsMusic { NotchMusicService.shared.start() } else { NotchMusicService.shared.stop() }
             releaseMonitor()
             return
         }

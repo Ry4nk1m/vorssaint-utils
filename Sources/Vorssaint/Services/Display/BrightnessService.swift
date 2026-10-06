@@ -1135,7 +1135,7 @@ final class BrightnessService: ObservableObject {
         let wantsBrightnessOSD = BrightnessSupport.overlayReplacesNative(
             overlayEnabled: defaults.bool(forKey: DefaultsKey.brightnessOSDEnabled),
             islandRoutes: NotchSupport.routes(.brightness),
-            islandShowsNotices: NotchService.shared.acceptsSystemFeedback
+            islandShowsNotices: NotchService.shared.acceptsLevelFeedback
                 && !NotchSupport.hidesUntilHover(in: defaults)) && brightnessOSDSupported
         let wantsKeyboardLight = NotchSupport.routes(.keyboardLight) && keyboardLightBridge != nil
         if !wantsKeyboardLight || !SessionActivity.shared.isActive {
@@ -1622,7 +1622,7 @@ final class BrightnessService: ObservableObject {
         // whether it shows notices right now.
         let wantsBrightnessOSD = BrightnessSupport.overlayReplacesNative(
             overlayEnabled: showsOverlay, islandRoutes: NotchSupport.routes(.brightness),
-            islandShowsNotices: NotchService.shared.showsSystemFeedback)
+            islandShowsNotices: NotchService.shared.showsLevelFeedback)
         let displayID: CGDirectDisplayID
         if followsPointer {
             let pointer = NSEvent.mouseLocation

@@ -32,7 +32,7 @@ final class PreciseVolumeRollerService: ObservableObject {
     func syncWithPreferences() {
         let wanted = AppFeature.mixer.isAvailable
             && (UserDefaults.standard.bool(forKey: DefaultsKey.preciseVolumeRollerEnabled)
-                || (NotchSupport.routes(.volume) && NotchService.shared.acceptsSystemFeedback))
+                || (NotchSupport.routes(.volume) && NotchService.shared.acceptsLevelFeedback))
         if SessionActivitySupport.tapShouldRun(featureWanted: wanted,
                                                accessibilityGranted: AXIsProcessTrusted(),
                                                sessionIsActive: SessionActivity.shared.isActive) {
@@ -148,8 +148,8 @@ final class PreciseVolumeRollerService: ObservableObject {
         let mixer = AppVolumeMixer.shared
         let action = notchKeyGate.handle(
             keyCode: code, state: state, isRepeat: nsEvent.data1 & 1 != 0,
-            enabled: NotchSupport.routes(.volume) && NotchService.shared.acceptsSystemFeedback,
-            acceptsNewPress: NotchService.shared.showsSystemFeedback,
+            enabled: NotchSupport.routes(.volume) && NotchService.shared.acceptsLevelFeedback,
+            acceptsNewPress: NotchService.shared.showsLevelFeedback,
             hasVolume: mixer.systemOutputVolume != nil, hasMute: mixer.systemOutputMuted != nil,
             option: event.flags.contains(.maskAlternate), shift: event.flags.contains(.maskShift),
             commandOrControl: event.flags.contains(.maskCommand) || event.flags.contains(.maskControl))
