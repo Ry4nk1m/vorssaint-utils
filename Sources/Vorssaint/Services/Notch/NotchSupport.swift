@@ -2235,6 +2235,10 @@ enum NotchMotion {
         }
     }
 
+    /// How many times faster than usual the island closes. 1 is the usual
+    /// closing; the full-screen menu bar leave raises it for that one move.
+    static var shrinkSpeed: Double = 1
+
     static let growingWidth = Spring(duration: 0.44, bounce: 0.25)
     static let growingHeight = Spring(duration: 0.38, bounce: 0.22)
     static let shrinkingWidth = Spring(duration: 0.30, bounce: 0)
@@ -2250,7 +2254,8 @@ enum NotchMotion {
 
     static func spring(from: CGFloat, to: CGFloat, width: Bool, steady: Bool = false) -> Spring {
         if steady && width { return steadyWidth }
-        let spring = to > from ? (width ? growingWidth : growingHeight) : (width ? shrinkingWidth : shrinkingHeight)
+        var spring = to > from ? (width ? growingWidth : growingHeight) : (width ? shrinkingWidth : shrinkingHeight)
+        if to <= from, shrinkSpeed != 1 { spring = Spring(duration: spring.duration / shrinkSpeed, bounce: spring.bounce) }
         return spring.limited(travel: abs(to - from), limit: overshootLimit)
     }
 

@@ -243,6 +243,11 @@ final class NotchService: ObservableObject {
     @Published private(set) var menuBarRevealed = false
     private var fullscreenRevealTimer: Timer?
     private var fullscreenTopSince: Date?
+    private var fullscreenBarDown: Bool?
+    private var fullscreenBarArmed = false
+    private var fullscreenReadCount = 0
+    private var menuBarSignalAvailable = false
+    private var menuBarSignalCheckedAt = Date.distantPast
     private var fullscreenLeftSince: Date?
     private var settingsSignature = ""
     private var gesture = NotchGestureSupport()
@@ -3038,6 +3043,9 @@ final class NotchService: ObservableObject {
             fullscreenRevealTimer?.invalidate()
             fullscreenRevealTimer = nil
             fullscreenTopSince = nil
+            fullscreenBarDown = nil
+            fullscreenBarArmed = false
+            menuBarSignalCheckedAt = .distantPast
             if menuBarRevealed { menuBarRevealed = false }
             return
         }
@@ -3050,6 +3058,20 @@ final class NotchService: ObservableObject {
 
     private func readFullscreenReveal() {
         guard hiddenInFullscreen, running, !suspended else { syncFullscreenRevealMonitoring(); return }
+        // The status items of the real menu bar are on screen while it is down
+        // and off screen while it is hidden, so they say exactly when it moves.
+        // Coming into full screen the bar is still down for a moment, so the
+        // island waits to see it hidden once before it follows.
+        fullscreenBarDown = systemMenuBarIsDown()
+        if let barDown = fullscreenBarDown {
+            if !fullscreenBarArmed {
+                if !barDown { fullscreenBarArmed = true }
+                return
+            }
+            if barDown != menuBarRevealed { setMenuBarRevealed(barDown) }
+            return
+        }
+        // No such windows on this display: the pointer decides, as below.
         let frame = geometry.screen
         let point = NSEvent.mouseLocation
         let overDisplay = point.x >= frame.minX && point.x <= frame.maxX
@@ -3073,6 +3095,38 @@ final class NotchService: ObservableObject {
         }
     }
 
+    /// Whether the system menu bar is down, read from the windows that draw
+    /// its status items. nil when this display has none, so the pointer decides.
+    private func systemMenuBarIsDown() -> Bool? {
+        let frame = geometry.screen
+        let top = (NSScreen.screens.first?.frame.maxY ?? frame.maxY) - frame.maxY
+        if Date().timeIntervalSince(menuBarSignalCheckedAt) > 2 {
+            menuBarSignalCheckedAt = Date()
+            menuBarSignalAvailable = menuBarItemWindowCount(onScreenOnly: false, top: top, frame: frame) > 0
+        }
+        guard menuBarSignalAvailable else { return nil }
+        return menuBarItemWindowCount(onScreenOnly: true, top: top, frame: frame) > 0
+    }
+
+    private func menuBarItemWindowCount(onScreenOnly: Bool, top: CGFloat, frame: CGRect) -> Int {
+        let options: CGWindowListOption = onScreenOnly ? [.optionOnScreenOnly] : [.optionAll]
+        guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return 0 }
+        var count = 0
+        for window in list {
+            guard (window[kCGWindowLayer as String] as? Int) == 25,
+                  let owner = window[kCGWindowOwnerName as String] as? String,
+                  owner == "Control Center" || owner == "SystemUIServer",
+                  let bounds = window[kCGWindowBounds as String] as? [String: Any],
+                  let x = (bounds["X"] as? NSNumber)?.doubleValue,
+                  let y = (bounds["Y"] as? NSNumber)?.doubleValue,
+                  let height = (bounds["Height"] as? NSNumber)?.doubleValue
+            else { continue }
+            if CGFloat(x) >= frame.minX - 1, CGFloat(x) < frame.maxX,
+               abs(CGFloat(y) - top) < 2, height > 15, height < 80 { count += 1 }
+        }
+        return count
+    }
+
     private func setMenuBarRevealed(_ revealed: Bool) {
         guard menuBarRevealed != revealed else { return }
         fullscreenLeftSince = nil
@@ -3083,6 +3137,10 @@ final class NotchService: ObservableObject {
             menuBarRevealed = revealed
         }
         syncVisibleConsumers()
+        // Going away: the bar's windows only leave once it is gone, so the
+        // island closes about three times as fast to be gone with it.
+        NotchMotion.shrinkSpeed = revealed ? 1 : 10
+        defer { NotchMotion.shrinkSpeed = 1 }
         refreshPresentation(animated: revealed ? false : !reduceMotion)
     }
 
